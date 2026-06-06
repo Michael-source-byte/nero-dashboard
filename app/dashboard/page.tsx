@@ -87,9 +87,9 @@ export default function Dashboard() {
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
-            const data = payload.new;
+            const data = payload.new as any;
 
-            setIsActive(data.snowy_active || false);
+            setIsActive(data?.snowy_active || false);
 
             const result = SnowyEngine({
               emergency_mode_permission: data.emergency_mode_permission,
