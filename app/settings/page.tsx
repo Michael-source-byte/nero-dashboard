@@ -39,18 +39,14 @@ export default function SettingsPage() {
   const [deactivateSafePartner, setDeactivateSafePartner] = useState(true);
   const [deactivateSafeLocation, setDeactivateSafeLocation] = useState(true);
 
-  // =========================
-  // MESSAGE CONTACT OVERLAY STATE
-  // =========================
   const [messageOverlayOpen, setMessageOverlayOpen] = useState(false);
 
   const [messageOptions, setMessageOptions] = useState({
     location: false,
     recording: false,
-    both: false, // FIX 2 — independent control
+    both: false,
   });
 
-  // FIX 2 — TRUE INDEPENDENT LOGIC (NO DERIVED STATE)
   const isMessageActive =
     messageOptions.location ||
     messageOptions.recording ||
@@ -98,6 +94,13 @@ export default function SettingsPage() {
         setDeactivateSafeWord(data.deactivate_safe_word ?? true);
         setDeactivateSafePartner(data.deactivate_safe_partner ?? true);
         setDeactivateSafeLocation(data.deactivate_safe_location ?? true);
+        setVoiceRecorderPermission(
+          data.voice_recorder_permission || false
+        );
+        
+        setCameraPermission(
+          data.camera_permission || false
+        );
       }
 
       setLoading(false);
@@ -107,20 +110,35 @@ export default function SettingsPage() {
   }, []);
 
   async function handleEmergencyModePermission() {
+    // user preference mode
+    if (emergencyModePermission) {
+      setEmergencyModePermission(false);
+      return;
+    }
+  
+    // first-time permission request
     const permission = await Notification.requestPermission();
-    setEmergencyModePermission(permission === "granted");
+  
+    if (permission === "granted") {
+      setEmergencyModePermission(true);
+    }
   }
 
   async function handleLocationPermission() {
+    if (locationPermission) {
+      setLocationPermission(false);
+      return;
+    }
+  
     if (!navigator.geolocation) return;
-
+  
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLiveCoords({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
         });
-
+  
         setLocationPermission(true);
       },
       () => setLocationPermission(false)
@@ -128,9 +146,18 @@ export default function SettingsPage() {
   }
 
   async function handleVoiceRecorderPermission() {
+    if (voiceRecorderPermission) {
+      setVoiceRecorderPermission(false);
+      return;
+    }
+  
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+  
       setVoiceRecorderPermission(true);
+  
       stream.getTracks().forEach((t) => t.stop());
     } catch {
       setVoiceRecorderPermission(false);
@@ -138,22 +165,65 @@ export default function SettingsPage() {
   }
 
   async function handleCameraPermission() {
+    if (cameraPermission) {
+      setCameraPermission(false);
+      return;
+    }
+  
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+  
       setCameraPermission(true);
+  
       stream.getTracks().forEach((t) => t.stop());
     } catch {
       setCameraPermission(false);
     }
   }
 
-  function toggleMessageOption(type: "location" | "recording" | "both") {
-    setMessageOptions((prev) => ({
+function toggleMessageOption(
+  type: "location" | "recording" | "both"
+) {
+  setMessageOptions((prev) => {
+    const next = {
       ...prev,
       [type]: !prev[type],
-    }));
-  }
+    };
 
+    // BOTH turned on
+    if (type === "both" && !prev.both) {
+      next.location = true;
+      next.recording = true;
+    }
+
+    // BOTH turned off
+    if (type === "both" && prev.both) {
+      next.location = false;
+      next.recording = false;
+    }
+
+    // Auto-enable BOTH if both options selected
+    if (
+      type !== "both" &&
+      next.location &&
+      next.recording
+    ) {
+      next.both = true;
+    }
+
+    // Auto-disable BOTH if either unchecked
+    if (
+      type !== "both" &&
+      (!next.location || !next.recording)
+    ) {
+      next.both = false;
+    }
+
+    return next;
+  });
+}
   async function save() {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData.user;
@@ -182,6 +252,9 @@ export default function SettingsPage() {
       deactivate_safe_word: deactivateSafeWord,
       deactivate_safe_partner: deactivateSafePartner,
       deactivate_safe_location: deactivateSafeLocation,
+      voice_recorder_permission: voiceRecorderPermission,
+      camera_permission: cameraPermission,
+      snowy_ai_enabled: true,
     };
 
     const { error } = await supabase
