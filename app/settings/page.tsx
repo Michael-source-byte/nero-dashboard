@@ -30,6 +30,7 @@ export default function SettingsPage() {
   // STEP 1 — NEW STATE VARIABLES
   const [voiceRecorderPermission, setVoiceRecorderPermission] = useState(false);
   const [cameraPermission, setCameraPermission] = useState(false);
+  const [faceImage, setFaceImage] = useState<string | null>(null);
 
   // RULES
   const [notifyContact, setNotifyContact] = useState(false);
@@ -101,6 +102,7 @@ export default function SettingsPage() {
         setCameraPermission(
           data.camera_permission || false
         );
+        setFaceImage(data.safe_partner_image_url || null);
       }
 
       setLoading(false);
@@ -164,7 +166,8 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleCameraPermission() {
+  async function handleCameraPermission()
+  {
     if (cameraPermission) {
       setCameraPermission(false);
       return;
@@ -181,6 +184,37 @@ export default function SettingsPage() {
     } catch {
       setCameraPermission(false);
     }
+  }
+
+  async function enrollFace(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+  
+    if (!file) return;
+  
+    const { data: userData } = await supabase.auth.getUser();
+  
+    const user = userData.user;
+  
+    if (!user) return;
+  
+    const filePath = `${user.id}/face.jpg`;
+  
+    const { error } = await supabase.storage
+      .from("safe-partner-faces")
+      .upload(filePath, file, {
+        upsert: true,
+      });
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    const { data } = supabase.storage
+      .from("safe-partner-faces")
+      .getPublicUrl(filePath);
+  
+    setFaceImage(data.publicUrl);
   }
 
 function toggleMessageOption(
@@ -255,6 +289,7 @@ function toggleMessageOption(
       voice_recorder_permission: voiceRecorderPermission,
       camera_permission: cameraPermission,
       snowy_ai_enabled: true,
+      safe_partner_image_url: faceImage,
     };
 
     const { error } = await supabase
@@ -342,11 +377,37 @@ function toggleMessageOption(
 
         <div className="space-y-3 mb-6">
           <Input label="Unsafe Word" value={unsafeWord} setValue={setUnsafeWord} />
+
           <Input label="Safe Word" value={safeWord} setValue={setSafeWord} />
-          <Input label="Safe Partner" value={safePartner} setValue={setSafePartner} />
+
+        <div>
+        <label className="text-xs text-gray-500">
+        Safe Partner Face ID
+        </label>
+
+         <input
+        type="file"
+        accept="image/*"
+        capture="user"
+        onChange={enrollFace}
+        className="w-full border p-2 rounded mt-1"
+        />
+
+        {faceImage && (
+        <img
+        src={faceImage}
+        alt="Face ID"
+        className="mt-2 rounded w-32 h-32 object-cover"
+        />
+        )}
+         </div>
+
           <Input label="Safe Location" value={safeLocation} setValue={setSafeLocation} />
+
           <Input label="Emergency Contact" value={emergencyContact} setValue={setEmergencyContact} />
+
           <Input label="Emergency Message" value={emergencyMessage} setValue={setEmergencyMessage} />
+
         </div>
 
         <button onClick={save} className="w-full mt-6 bg-black text-white py-2 rounded">
