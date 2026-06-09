@@ -39,6 +39,12 @@ export default function SettingsPage() {
   const [deactivateSafeWord, setDeactivateSafeWord] = useState(true);
   const [deactivateSafePartner, setDeactivateSafePartner] = useState(true);
   const [deactivateSafeLocation, setDeactivateSafeLocation] = useState(true);
+  const [safeAudioURL, setSafeAudioURL] = useState<string | null>(null);
+  const [unsafeAudioURL, setUnsafeAudioURL] = useState<string | null>(null);
+  const [recordingType, setRecordingType] = useState<"safe" | "unsafe" | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
 
   const [messageOverlayOpen, setMessageOverlayOpen] = useState(false);
 
@@ -95,6 +101,9 @@ export default function SettingsPage() {
         setDeactivateSafeWord(data.deactivate_safe_word ?? true);
         setDeactivateSafePartner(data.deactivate_safe_partner ?? true);
         setDeactivateSafeLocation(data.deactivate_safe_location ?? true);
+        setFaceImage(data.safe_partner_image_url || null);
+        setSafeAudioURL(data.safe_word_audio_url || null);
+        setUnsafeAudioURL(data.unsafe_word_audio_url || null);
         setVoiceRecorderPermission(
           data.voice_recorder_permission || false
         );
@@ -164,6 +173,56 @@ export default function SettingsPage() {
     } catch {
       setVoiceRecorderPermission(false);
     }
+  }
+
+  async function startRecording(type: "safe" | "unsafe") {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  
+    const recorder = new MediaRecorder(stream);
+    setMediaRecorder(recorder);
+    setRecordingType(type);
+    setAudioChunks([]);
+  
+    recorder.ondataavailable = (e) => {
+      setAudioChunks((prev) => [...prev, e.data]);
+    };
+  
+    recorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+  
+      const fileName = `${type}-${Date.now()}.webm`;
+  
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+  
+      if (!user) return;
+  
+      const { error } = await supabase.storage
+        .from("voice-enrollments")
+        .upload(`${user.id}/${fileName}`, audioBlob, {
+          contentType: "audio/webm",
+        });
+  
+      if (error) {
+        alert(error.message);
+        return;
+      }
+  
+      const { data } = supabase.storage
+        .from("voice-enrollments")
+        .getPublicUrl(`${user.id}/${fileName}`);
+  
+      if (type === "safe") setSafeAudioURL(data.publicUrl);
+      if (type === "unsafe") setUnsafeAudioURL(data.publicUrl);
+    };
+  
+    recorder.start();
+    setIsRecording(true);
+  }
+
+  function stopRecording() {
+    mediaRecorder?.stop();
+    setIsRecording(false);
   }
 
   async function handleCameraPermission()
@@ -290,6 +349,8 @@ function toggleMessageOption(
       camera_permission: cameraPermission,
       snowy_ai_enabled: true,
       safe_partner_image_url: faceImage,
+      safe_word_audio_url: safeAudioURL,
+      unsafe_word_audio_url: unsafeAudioURL,
     };
 
     const { error } = await supabase
@@ -376,9 +437,57 @@ function toggleMessageOption(
         </p>
 
         <div className="space-y-3 mb-6">
-          <Input label="Unsafe Word" value={unsafeWord} setValue={setUnsafeWord} />
+        <div className="mt-4">
+  <label className="text-xs text-gray-500">Unsafe Word (Voice)</label>
 
-          <Input label="Safe Word" value={safeWord} setValue={setSafeWord} />
+  <div className="flex gap-2 mt-1">
+    <button
+      onClick={() => startRecording("unsafe")}
+      className="bg-black text-white px-3 py-1 rounded"
+    >
+      Record
+    </button>
+
+    <button
+      onClick={stopRecording}
+      className="bg-gray-300 px-3 py-1 rounded"
+    >
+      Stop
+    </button>
+  </div>
+
+  {unsafeAudioURL && (
+    <audio controls className="mt-2 w-full">
+      <source src={unsafeAudioURL} />
+    </audio>
+  )}
+</div>
+
+          <div>
+  <label className="text-xs text-gray-500">Safe Word (Voice)</label>
+
+  <div className="flex gap-2 mt-1">
+    <button
+      onClick={() => startRecording("safe")}
+      className="bg-black text-white px-3 py-1 rounded"
+    >
+      Record
+    </button>
+
+    <button
+      onClick={stopRecording}
+      className="bg-gray-300 px-3 py-1 rounded"
+    >
+      Stop
+    </button>
+  </div>
+
+  {safeAudioURL && (
+    <audio controls className="mt-2 w-full">
+      <source src={safeAudioURL} />
+    </audio>
+  )}
+</div>
 
         <div>
         <label className="text-xs text-gray-500">
