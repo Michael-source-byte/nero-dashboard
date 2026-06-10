@@ -22,6 +22,8 @@ export default function SettingsPage() {
     lat: number | null;
     lng: number | null;
   }>({ lat: null, lng: null });
+  const [safeLat, setSafeLat] = useState<number | null>(null);
+  const [safeLng, setSafeLng] = useState<number | null>(null);
 
   // PERMISSIONS
   const [emergencyModePermission, setEmergencyModePermission] = useState(false);
@@ -89,6 +91,10 @@ export default function SettingsPage() {
         setSafeWord(data.safe_word || "");
         setSafePartner(data.safe_partner || "");
         setSafeLocation(data.safe_location || "");
+
+        setSafeLat(data.safe_lat ?? null);
+        setSafeLng(data.safe_lng ?? null);
+
         setEmergencyContact(data.emergency_contact || "");
         setEmergencyMessage(data.emergency_message || "");
 
@@ -153,6 +159,25 @@ export default function SettingsPage() {
         setLocationPermission(true);
       },
       () => setLocationPermission(false)
+    );
+  }
+
+  async function enrollSafeLocation() {
+    if (!navigator.geolocation) {
+      alert("Location services unavailable");
+      return;
+    }
+  
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setSafeLat(position.coords.latitude);
+        setSafeLng(position.coords.longitude);
+  
+        alert("Safe location enrolled");
+      },
+      () => {
+        alert("Failed to get location");
+      }
     );
   }
 
@@ -335,6 +360,8 @@ function toggleMessageOption(
 
       emergency_mode_permission: emergencyModePermission,
       location_permission: locationPermission,
+      safe_lat: safeLat,
+      safe_lng: safeLng,
 
       live_lat: liveCoords.lat,
       live_lng: liveCoords.lng,
@@ -511,7 +538,27 @@ function toggleMessageOption(
         )}
          </div>
 
-          <Input label="Safe Location" value={safeLocation} setValue={setSafeLocation} />
+         <div className="border rounded p-3">
+  <label className="text-xs text-gray-500">
+    Safe Location
+  </label>
+
+  <button
+    type="button"
+    onClick={enrollSafeLocation}
+    className="w-full mt-2 bg-black text-white py-2 rounded"
+  >
+    Set Current Location
+  </button>
+
+  {safeLat && safeLng && (
+    <div className="mt-3 text-sm text-black">
+      <p>✅ Safe Location Saved</p>
+      <p>Latitude: {safeLat}</p>
+      <p>Longitude: {safeLng}</p>
+    </div>
+  )}
+</div>
 
           <Input label="Emergency Contact" value={emergencyContact} setValue={setEmergencyContact} />
 
