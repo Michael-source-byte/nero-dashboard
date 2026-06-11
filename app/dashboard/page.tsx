@@ -25,6 +25,21 @@ export default function Dashboard() {
   useEffect(() => {
     let channel: any;
 
+    // =========================
+    // STEP 1 — HANDLERS (TOP)
+    // =========================
+    const emergencyHandler = () => {
+      console.log("🚨 EMERGENCY MODE ACTIVATED");
+    };
+
+    const locationHandler = (data: any) => {
+      console.log("📍 Location event:", data);
+    };
+
+    const safeWordHandler = () => {
+      console.log("🧠 Safe word detected");
+    };
+
     const load = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
 
@@ -61,19 +76,11 @@ export default function Dashboard() {
         setSystemArmed(result.system_armed);
 
         // =========================
-        // EVENT LISTENERS (ADDED)
+        // STEP 2 — REGISTER EVENTS
         // =========================
-        SnowyEvents.on("emergency_mode_triggered", () => {
-          console.log("🚨 EMERGENCY MODE ACTIVATED");
-        });
-
-        SnowyEvents.on("location_triggered", (data) => {
-          console.log("📍 Location event:", data);
-        });
-
-        SnowyEvents.on("safe_word_triggered", () => {
-          console.log("🧠 Safe word detected");
-        });
+        SnowyEvents.on("emergency_mode_triggered", emergencyHandler);
+        SnowyEvents.on("location_triggered", locationHandler);
+        SnowyEvents.on("safe_word_triggered", safeWordHandler);
       }
 
       channel = supabase
@@ -110,8 +117,15 @@ export default function Dashboard() {
 
     load();
 
+    // =========================
+    // STEP 3 — CLEANUP FIX
+    // =========================
     return () => {
       if (channel) supabase.removeChannel(channel);
+
+      SnowyEvents.off("emergency_mode_triggered", emergencyHandler);
+      SnowyEvents.off("location_triggered", locationHandler);
+      SnowyEvents.off("safe_word_triggered", safeWordHandler);
     };
   }, []);
 
@@ -128,12 +142,38 @@ export default function Dashboard() {
       .from("settings")
       .select("*")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
+
+    // =========================
+    // CHANGE 4 — SAFE GUARD
+    // =========================
+    if (!settings) return;
 
     if (newState) {
+      console.log("Snowy BOOTING...");
+      console.log("Loading settings...");
+      console.log("Initializing triggers...");
+
+      // =========================
+      // CHANGE 5 — SAFE ENGINE CALL
+      // =========================
+      const result = SnowyEngine({
+        emergency_mode_permission: settings.emergency_mode_permission,
+        location_permission: settings.location_permission,
+        notify_emergency_contact: settings.notify_emergency_contact,
+        call_emergency_contact: settings.call_emergency_contact,
+        live_lat: settings.live_lat,
+        live_lng: settings.live_lng,
+      });
+
+      setSystemArmed(result.system_armed);
+
       SnowyRuntime.start(user.id, settings);
+
+      console.log("Snowy ACTIVE");
     } else {
       SnowyRuntime.stop();
+      console.log("Snowy STOPPED");
     }
 
     await supabase.from("settings").upsert(
@@ -160,7 +200,6 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen bg-[#32297A] flex items-center justify-center relative">
-
       {showProfile && (
         <div className="absolute top-20 left-10 bg-white shadow-xl rounded-xl p-4 w-56 z-50">
           <p className="text-sm text-gray-600 mb-2">{userEmail}</p>
@@ -179,9 +218,7 @@ export default function Dashboard() {
       )}
 
       <div className="w-[380px] h-[760px] bg-[#F5F5F5] rounded-[40px] shadow-2xl flex flex-col">
-
         <div className="flex justify-between items-center px-6 pt-6">
-
           <button
             onClick={() => setShowProfile(!showProfile)}
             className="text-black"
@@ -195,7 +232,6 @@ export default function Dashboard() {
           >
             <Settings size={22} />
           </button>
-
         </div>
 
         <div className="flex justify-center mt-4">
@@ -221,7 +257,6 @@ export default function Dashboard() {
             {isActive ? "OFF" : "ON"}
           </button>
         </div>
-
       </div>
     </main>
   );

@@ -10,6 +10,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
 
   // SECTION 1
+  const [snowyEnabled, setSnowyEnabled] = useState(false);
   const [unsafeWord, setUnsafeWord] = useState("");
   const [safeWord, setSafeWord] = useState("");
   const [safePartner, setSafePartner] = useState("");
@@ -69,7 +70,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const load = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
-
+       
       if (!sessionData.session) {
         router.replace("/login");
         return;
@@ -94,6 +95,7 @@ export default function SettingsPage() {
 
         setSafeLat(data.safe_lat ?? null);
         setSafeLng(data.safe_lng ?? null);
+        setSnowyEnabled(data.snowy_enabled ?? false);
 
         setEmergencyContact(data.emergency_contact || "");
         setEmergencyMessage(data.emergency_message || "");
@@ -350,7 +352,8 @@ function toggleMessageOption(
 
     const payload = {
       user_id: user.id,
-
+      
+      snowy_enabled: snowyEnabled,
       unsafe_word: unsafeWord,
       safe_word: safeWord,
       safe_partner: safePartner,
@@ -564,9 +567,30 @@ function toggleMessageOption(
 
           <Input label="Emergency Message" value={emergencyMessage} setValue={setEmergencyMessage} />
 
+
+
+       {/* SNOWY STATUS ONLY */}
+<div className="border rounded-xl p-4 mb-6">
+  <h3 className="font-bold text-black">Snowy AI</h3>
+
+  <p
+    className={`mt-2 font-bold ${
+      snowyEnabled ? "text-green-600" : "text-red-600"
+    }`}
+  >
+    {snowyEnabled ? "READY" : "NOT READY"}
+  </p>
+
+  <p className="text-xs text-gray-500 mt-1">
+    Controlled from Dashboard
+  </p>
+</div>
+
         </div>
 
-        <button onClick={save} className="w-full mt-6 bg-black text-white py-2 rounded">
+        <button 
+
+        onClick={save} className="w-full mt-6 bg-black text-white py-2 rounded">
           Save Settings
         </button>
 
